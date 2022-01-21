@@ -155,6 +155,8 @@ def rescale_bboxes(out_bbox, size):
 
 
 def main(args):
+    # Test
+    start_time = time.time()
 
     device = torch.device(args.device)
 
@@ -173,6 +175,13 @@ def main(args):
         folder = args.img_path
         videos = json.load(open(args.ann_path,'rb'))['videos']
         vis_num = len(videos)
+
+        # Test
+        process_start_time = time.time()
+        inference_time_acc = 0.0
+        frame_count = 0
+        vis_num = 10
+
         result = [] 
         for i in range(vis_num):
             print("Process video: ",i)
@@ -195,8 +204,16 @@ def main(args):
                 im = Image.open(os.path.join(folder,clip_names[k]))
                 img_set.append(transform(im).unsqueeze(0).cuda())
             img=torch.cat(img_set,0)
+
+            # Test
+            frame_count += len(img_set)
+            inference_start_time = time.time()
+
             # inference time is calculated for this operation
             outputs = model(img)
+
+            inference_time_acc += time.time() - inference_start_time
+
             # end of model inference
             logits, boxes, masks = outputs['pred_logits'].softmax(-1)[0,:,:-1], outputs['pred_boxes'][0], outputs['pred_masks'][0]
             pred_masks =F.interpolate(masks.reshape(num_frames,num_ins,masks.shape[-2],masks.shape[-1]),(im.size[1],im.size[0]),mode="bilinear").sigmoid().cpu().detach().numpy()>0.5
@@ -223,8 +240,18 @@ def main(args):
                         segmentation.append(rle)
                 instance['segmentations'] = segmentation
                 result.append(instance)
+    
+        # Test
+        print('Inference time: ', inference_time_acc)
+        print('Frame count: ', frame_count)
+        print('Inference time per frame: ', inference_time_acc / frame_count)
+        print('Process time (include image read, copy to cuda, but not model build): ', time.time() - process_start_time)    
+
     with open(args.save_path, 'w', encoding='utf-8') as f:
         json.dump(result,f)
+    
+    # Test
+    print('Total runtime (model build + inference + image read + copy to cuda ...): ', time.time() - start_time)
                     
         
 
